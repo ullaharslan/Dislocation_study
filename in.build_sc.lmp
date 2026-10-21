@@ -1,0 +1,65 @@
+# =============================================================================
+# SCRIPT 1: MARTENSITE SUPERCELL BANANA
+# Martensite (BCT/BCC) Fe-C structure
+# Yeh script 36-atom unit cell ko replicate karke bada supercell banata hai
+# Dislocation ke liye proper orientation mein
+# =============================================================================
+# Author: irslan.ashraf@dfa.unict.it
+# Potential: Fe-C_Hepburn_Ackland.eam (pair_style eam/fs)
+# =============================================================================
+
+# ---------- Variables ----------
+variable  pot_path  string  "/home/irslanullahashraf/lammps/potentials"
+variable  data_path string  "/home/irslanullahashraf/md/martinsite-steel/Fe16C1_BCT_3_lmp.lmp"   # <- APNA PATH YAHAN LIKHO
+
+# Martensite lattice parameters (Angstrom)
+# a = b = 2.87 A (BCC iron ke qareeb)
+# c depends on carbon content: c = a * (1 + 0.046*xC) where xC = atomic % C
+variable  a_lat   equal  2.87
+variable  c_lat   equal  2.98   # ~0.3 wt% C ke liye (apna adjust karo)
+
+# Replication: kitni baar copy karna hai
+# Edge dislocation ke liye: x > 20a, y > 20a, z > 10c minimum
+variable  rx   equal  6   # x direction replications
+variable  ry   equal  6   # y direction replications
+variable  rz   equal  2    # z direction replications
+
+# ---------- Initialization ----------
+units       metal
+boundary    p p p          # Sab taraf periodic (baad mein y ko shrink karenge)
+atom_style  atomic
+
+# ---------- Read existing 36-atom data file ----------
+read_data   ${data_path}
+
+# ---------- Potential ----------
+pair_style  eam/fs
+pair_coeff  * * ${pot_path}/Fe-C_Hepburn_Ackland.eam.fs  Fe C
+# NOTE: Atom type 1 = Fe, Atom type 2 = C
+# Agar sirf Fe hai to: pair_coeff * * ${pot_path}/Fe-C_Hepburn_Ackland.eam Fe
+
+neighbor      2.5 bin
+neigh_modify  delay 5 every 1
+
+# ---------- Replicate to large supercell ----------
+replicate   ${rx} ${ry} ${rz}
+
+# ---------- Thermo output ----------
+thermo      100
+thermo_style  custom step atoms pe ke etotal press vol
+
+# ---------- Quick minimization to check structure ----------
+minimize  1e-10  1e-10  1000  10000
+
+# ---------- Save the supercell ----------
+write_data  martensite_supercell.data
+dump  check  all  atom  1  martensite_initial.dump
+
+run 0
+
+print "========================================"
+print "Supercell ready!"
+print "Total atoms: $(atoms)"
+print "Box: $(xlo):$(xhi)  $(ylo):$(yhi)  $(zlo):$(zhi)"
+print "========================================"
+

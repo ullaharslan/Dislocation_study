@@ -1,0 +1,51 @@
+variable  pot_path  string  "/home/irslanullahashraf/lammps/potentials"
+variable  a_lat     equal   2.87        # Fe lattice parameter (Angstrom)
+variable  c_over_a  equal   1.003       # BCT ratio (apne carbon % se badlo)
+variable  b_mag     equal   ${a_lat}*sqrt(3)/2  # Burgers vector a/2[111]
+variable  Lx        equal   30*${b_mag} # box x size
+variable  Ly        equal   25*${a_lat} # box y size
+variable  Lz        equal   8*${a_lat}  # box z size
+
+units       metal
+boundary    p s p   # y non-periodic, x z periodic
+atom_style  atomic
+lattice bcc ${a_lat} orient x 1 1 1 orient y 1 -1 0 orient z 1 1 -2 # # Burgers vector direction [111]Slip plane (110) normal dislocation line [11-2]
+
+region     box block 0 ${Lx} 0 ${Ly} 0 ${Lz} units box
+create_box 2 box                # 2 types: Fe=1, C=2
+create_atoms 1 box              # Fe atoms banao
+
+pair_style  eam/fs
+pair_coeff  * * ${pot_path}/Fe-C_Hepburn_Ackland.eam.fs  Fe C  # potential load karo
+
+neighbor      2.5 bin
+neigh_modify  delay 5 every 1 check yes
+
+thermo       50
+thermo_style custom step atoms pe etotal press lx ly lz
+
+variable  xhalf   equal  $(xhi+xlo)/2  # box ka x center
+variable  yhalf   equal  $(yhi+ylo)/2  # box ka y center
+variable  ydel_lo equal  ${yhalf}
+variable  ydel_hi equal  ${yhalf}+${b_mag}
+
+region       half_plane block ${xhalf} INF ${ydel_lo} ${ydel_hi} INF INF units box
+group        extra_plane region half_plane
+delete_atoms group extra_plane  # extra half-plane delete karo = edge dislocation
+
+change_box all y delta 0 -${b_mag} units box  # box y compress karo gap bharne ke liye
+
+min_style  cg
+minimize   1e-20  1e-10  10000  100000   # coarse minimization
+
+min_style  fire
+minimize   1e-50  1e-25  50000  500000   # fine minimization (dislocation core relax)
+
+compute  csp  all  centro/atom bcc                                      # pehle compute define karo
+dump  final  all  custom  1  edge_disloc_final.dump  id type x y z c_csp  # phir c_csp se reference karo
+
+run 0
+
+write_data    edge_disloc_final.data     # data file save karo
+write_restart edge_disloc_final.restart  # restart file save karo
+
